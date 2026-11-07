@@ -1,0 +1,253 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101014">
+  <title>Agora Não</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #101014;
+      color: #eeeef2;
+      font-family: system-ui, sans-serif;
+    }
+
+    header {
+      padding: 65px 8%;
+      background: linear-gradient(130deg, #24243a, #101014);
+      border-bottom: 1px solid #30303b;
+    }
+
+    header h1 {
+      font-size: clamp(2.5rem, 8vw, 5rem);
+      margin: 0;
+      letter-spacing: -3px;
+    }
+
+    header p {
+      color: #aaaaba;
+      margin-top: 8px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: auto;
+      padding: 35px 20px;
+    }
+
+    .section-title {
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+
+    #projects {
+      display: grid;
+      grid-template-columns: repeat(
+        auto-fit, minmax(min(100%, 280px), 1fr)
+      );
+      gap: 16px;
+    }
+
+    .project {
+      background: #191920;
+      border: 1px solid #30303b;
+      border-radius: 13px;
+      padding: 20px;
+      transition: .2s;
+      overflow-wrap: anywhere;
+    }
+
+    .project:hover {
+      border-color: #7777bd;
+      transform: translateY(-3px);
+    }
+
+    .project h2 {
+      margin: 0 0 12px;
+      font-size: 1.3rem;
+    }
+
+    .description {
+      color: #b6b6c4;
+      line-height: 1.6;
+    }
+
+    .description a {
+      color: #aaaaff;
+    }
+
+    .project-link {
+      display: inline-block;
+      margin-top: 15px;
+      color: #b3b3ff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .project-link:hover {
+      text-decoration: underline;
+    }
+
+    .status {
+      color: #858594;
+      font-size: .9rem;
+      margin-bottom: 20px;
+    }
+
+    footer {
+      border-top: 1px solid #30303b;
+      padding: 25px;
+      text-align: center;
+      color: #777783;
+      font-size: .85rem;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Agora Não.</h1>
+    <p>Meus projetos, experimentos e outras idiotices</p>
+  </header>
+
+  <main>
+    <h2 class="section-title">Projetos</h2>
+    <div class="status" id="status">Carregando projetos...</div>
+    <section id="projects"></section>
+  </main>
+
+  <footer>
+    © Agora Não · Powered by GitHub Pages
+  </footer>
+
+  <script>
+    const USER = "agora-nao01";
+    const REPO = "agora-nao01.github.io";
+    const FOLDER = "projs";
+
+    const container = document.getElementById("projects");
+    const status = document.getElementById("status");
+
+    async function loadProjects() {
+      try {
+        const api = `https://api.github.com/repos/${USER}/${REPO}/contents/${FOLDER}`;
+
+        const response = await fetch(api);
+
+        if (!response.ok) {
+          throw new Error("Não foi possível acessar a pasta projs");
+        }
+
+        const files = await response.json();
+
+        const markdownFiles = files.filter(file =>
+          file.type === "file" &&
+          file.name.toLowerCase().endsWith(".md")
+        );
+
+        if (markdownFiles.length === 0) {
+          status.textContent = "Nenhum projeto encontrado";
+          return;
+        }
+
+        status.textContent =
+          `${markdownFiles.length} projeto(s) encontrado(s)`;
+
+        for (const file of markdownFiles) {
+          try {
+            const result = await fetch(file.download_url);
+
+            if (!result.ok) continue;
+
+            const content = await result.text();
+            renderProject(file.name, content);
+          } catch (error) {
+            console.error(file.name, error);
+          }
+        }
+
+      } catch (error) {
+        status.textContent = "Erro ao carregar projetos";
+        console.error(error);
+      }
+    }
+
+    function renderProject(filename, content) {
+      const parts = content.split(/^---\s*$/m);
+
+      const metadata = parts[0] || "";
+      const body = parts.slice(1).join("\n---\n");
+
+      const linkMatch = metadata.match(/^link:\s*(.+)$/im);
+      const titleMatch = body.match(/^tittle:\s*(.+)$/im)
+        || body.match(/^title:\s*(.+)$/im);
+
+      const link = linkMatch ? linkMatch[1].trim() : "";
+      const title = titleMatch
+        ? titleMatch[1].trim()
+        : filename.replace(/\.md$/i, "");
+
+      let description = body;
+
+      if (titleMatch) {
+        description = body.slice(
+          titleMatch.index + titleMatch[0].length
+        ).trim();
+      }
+
+      const card = document.createElement("article");
+      card.className = "project";
+
+      const heading = document.createElement("h2");
+      heading.textContent = title;
+
+      const text = document.createElement("div");
+      text.className = "description";
+
+      if (window.marked && window.DOMPurify) {
+        text.innerHTML = DOMPurify.sanitize(
+          marked.parse(description)
+        );
+      } else {
+        text.textContent = description;
+      }
+
+      card.appendChild(heading);
+      card.appendChild(text);
+
+      if (link) {
+        try {
+          const url = new URL(link);
+
+          if (url.protocol === "https:" || url.protocol === "http:") {
+            const anchor = document.createElement("a");
+            anchor.className = "project-link";
+            anchor.href = url.href;
+            anchor.target = "_blank";
+            anchor.rel = "noopener noreferrer";
+            anchor.textContent = "Visitar projeto →";
+
+            card.appendChild(anchor);
+          }
+        } catch (error) {
+          console.warn("Link inválido:", link);
+        }
+      }
+
+      container.appendChild(card);
+    }
+
+    loadProjects();
+  </script>
+</body>
+</html>
